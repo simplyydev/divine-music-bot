@@ -1,5 +1,6 @@
 import { Client, GatewayIntentBits, Collection } from 'discord.js';
 import { config } from 'dotenv';
+import play from 'play-dl';
 import { registerCommands } from './deploy-commands.js';
 import { playCommand } from './commands/play.js';
 import { skip } from './commands/skip.js';
@@ -10,11 +11,19 @@ import { resume } from './commands/resume.js';
 
 config();
 
+// Initialize play-dl with YouTube
+await play.setToken({
+  youtube: {
+    cookie: process.env.YOUTUBE_COOKIE // Optional
+  }
+});
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
   ],
 });
 
@@ -43,12 +52,21 @@ client.on('interactionCreate', async (interaction) => {
   try {
     await command.execute(interaction, client);
   } catch (error) {
-    console.error(error);
-    await interaction.reply({
-      content: 'There was an error executing this command!',
-      ephemeral: true,
-    });
+    console.error('Command execution error:', error);
+    const errorMessage = 'There was an error executing this command!';
+    if (interaction.deferred) {
+      await interaction.editReply({ content: errorMessage, ephemeral: true });
+    } else {
+      await interaction.reply({ content: errorMessage, ephemeral: true });
+    }
   }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+process.on('unhandledRejection', error => {
+  console.error('Unhandled promise rejection:', error);
+});
+
+client.login(process.env.DISCORD_TOKEN).catch(error => {
+  console.error('Failed to login:', error);
+  process.exit(1);
+});
