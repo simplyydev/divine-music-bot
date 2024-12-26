@@ -11,10 +11,10 @@ import { resume } from './commands/resume.js';
 
 config();
 
-// Initialize play-dl with YouTube
-await play.setToken({
+// Initialize play-dl with default settings
+play.setToken({
   youtube: {
-    cookie: process.env.YOUTUBE_COOKIE // Optional
+    cookie: '' // We'll use default authentication
   }
 });
 
