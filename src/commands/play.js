@@ -14,11 +14,11 @@ export const playCommand = {
     await interaction.deferReply();
 
     try {
-      const queue = await createQueue(interaction.guildId, client);
+      let queue = await createQueue(interaction.guildId, client);
       const songInfo = await searchSong(query);
       
       if (!songInfo) {
-        return interaction.editReply('No results found!');
+        return interaction.editReply('No results found or there was an error!');
       }
 
       const song = {
@@ -29,20 +29,23 @@ export const playCommand = {
 
       queue.songs.push(song);
 
-      if (!queue.playing) {
+      if (!queue.connection || !queue.playing) {
         queue.playing = true;
         queue.connection = joinVoiceChannel({
           channelId: voiceChannel.id,
           guildId: interaction.guildId,
           adapterCreator: interaction.guild.voiceAdapterCreator,
+          selfDeaf: true,
+          selfMute: false
         });
         
         await playSong(queue, interaction.guildId, client);
+        await interaction.editReply(`🎵 Now playing: **${song.title}**`);
+      } else {
+        await interaction.editReply(`🎵 Added to queue: **${song.title}**`);
       }
-
-      await interaction.editReply(`🎵 Added to queue: **${song.title}**`);
     } catch (error) {
-      console.error(error);
+      console.error('Error in play command:', error);
       await interaction.editReply('There was an error playing this song!');
     }
   }

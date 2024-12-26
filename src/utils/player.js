@@ -1,4 +1,4 @@
-import { joinVoiceChannel, createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
+import { createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
 import play from 'play-dl';
 
 export async function createQueue(guildId, client) {
@@ -14,35 +14,65 @@ export async function createQueue(guildId, client) {
 }
 
 export async function searchSong(query) {
-  if (query.startsWith('http')) {
-    return await play.video_info(query);
-  }
-  
-  const searchResults = await play.search(query, { limit: 1 });
-  if (!searchResults.length) {
+  try {
+    if (query.startsWith('http')) {
+      return await play.video_info(query);
+    }
+    
+    const searchResults = await play.search(query, { limit: 1 });
+    if (!searchResults.length) {
+      return null;
+    }
+    return await play.video_info(searchResults[0].url);
+  } catch (error) {
+    console.error('Error searching for song:', error);
     return null;
   }
-  return await play.video_info(searchResults[0].url);
 }
 
 export async function playSong(queue, guildId, client) {
-  if (queue.songs.length === 0) {
-    queue.playing = false;
-    queue.connection.destroy();
-    return;
-  }
+  try {
+    if (!queue.songs.length) {
+      queue.playing = false;
+      if (queue.connection) {
+        queue.connection.destroy();
+      }
+      return;
+    }
 
-  const song = queue.songs[0];
-  const stream = await play.stream(song.url);
-  const resource = createAudioResource(stream.stream, {
-    inputType: stream.type
-  });
+    const song = queue.songs[0];
+    
+    // Set up stream with proper options
+    const stream = await play.stream(song.url, {
+      discordPlayerCompatibility: true
+    });
+    
+    const resource = createAudioResource(stream.stream, {
+      inputType: stream.type,
+      inlineVolume: true
+    });
 
-  queue.player.play(resource);
-  queue.connection.subscribe(queue.player);
+    queue.player.play(resource);
+    
+    if (!queue.connection.state.status === 'ready') {
+      queue.connection.subscribe(queue.player);
+    }
 
-  queue.player.on(AudioPlayerStatus.Idle, () => {
+    // Handle audio player state changes
+    queue.player.on(AudioPlayerStatus.Idle, () => {
+      queue.songs.shift();
+      playSong(queue, guildId, client);
+    });
+
+    queue.player.on('error', error => {
+      console.error('Error playing song:', error);
+      queue.songs.shift();
+      playSong(queue, guildId, client);
+    });
+
+  } catch (error) {
+    console.error('Error in playSong:', error);
     queue.songs.shift();
     playSong(queue, guildId, client);
-  });
+  }
 }
