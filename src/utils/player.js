@@ -1,4 +1,4 @@
-import { createAudioPlayer, createAudioResource, AudioPlayerStatus } from '@discordjs/voice';
+import { createAudioPlayer, createAudioResource, AudioPlayerStatus, VoiceConnectionStatus } from '@discordjs/voice';
 import play from 'play-dl';
 
 export async function createQueue(guildId, client) {
@@ -43,20 +43,29 @@ export async function playSong(queue, guildId, client) {
     const song = queue.songs[0];
     
     // Set up stream with proper options
-    const stream = await play.stream(song.url, {
-      discordPlayerCompatibility: true
-    });
+    const stream = await play.stream(song.url);
     
     const resource = createAudioResource(stream.stream, {
-      inputType: stream.type,
-      inlineVolume: true
+      inputType: stream.type
+    });
+
+    // Subscribe to the player before playing
+    queue.connection.subscribe(queue.player);
+
+    // Set up connection error handling
+    queue.connection.on(VoiceConnectionStatus.Disconnected, async () => {
+      try {
+        await Promise.race([
+          entersState(queue.connection, VoiceConnectionStatus.Signalling, 5_000),
+          entersState(queue.connection, VoiceConnectionStatus.Connecting, 5_000),
+        ]);
+      } catch (error) {
+        queue.connection.destroy();
+        queue.playing = false;
+      }
     });
 
     queue.player.play(resource);
-    
-    if (!queue.connection.state.status === 'ready') {
-      queue.connection.subscribe(queue.player);
-    }
 
     // Handle audio player state changes
     queue.player.on(AudioPlayerStatus.Idle, () => {

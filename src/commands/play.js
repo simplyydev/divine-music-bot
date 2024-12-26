@@ -1,4 +1,4 @@
-import { joinVoiceChannel } from '@discordjs/voice';
+import { joinVoiceChannel, VoiceConnectionStatus } from '@discordjs/voice';
 import { createQueue, searchSong, playSong } from '../utils/player.js';
 
 export const playCommand = {
@@ -9,6 +9,12 @@ export const playCommand = {
     const voiceChannel = interaction.member.voice.channel;
     if (!voiceChannel) {
       return interaction.reply('You need to be in a voice channel!');
+    }
+
+    // Check for required permissions
+    const permissions = voiceChannel.permissionsFor(client.user);
+    if (!permissions.has('Connect') || !permissions.has('Speak')) {
+      return interaction.reply('I need permissions to join and speak in your voice channel!');
     }
 
     await interaction.deferReply();
@@ -35,11 +41,14 @@ export const playCommand = {
           channelId: voiceChannel.id,
           guildId: interaction.guildId,
           adapterCreator: interaction.guild.voiceAdapterCreator,
-          selfDeaf: true,
-          selfMute: false
+          selfDeaf: true
         });
-        
-        await playSong(queue, interaction.guildId, client);
+
+        // Wait for the connection to be ready
+        queue.connection.on(VoiceConnectionStatus.Ready, async () => {
+          await playSong(queue, interaction.guildId, client);
+        });
+
         await interaction.editReply(`🎵 Now playing: **${song.title}**`);
       } else {
         await interaction.editReply(`🎵 Added to queue: **${song.title}**`);
