@@ -49,11 +49,11 @@ export async function playSong(queue, guildId, client) {
     const song = queue.songs[0];
     console.log('Attempting to play:', song.title);
     
-    const stream = await play.stream(song.url);
+    const { stream, type } = await play.stream(song.url);
     console.log('Stream created successfully');
     
-    const resource = createAudioResource(stream.stream, {
-      inputType: stream.type,
+    const resource = createAudioResource(stream, {
+      inputType: type,
       inlineVolume: true
     });
     
