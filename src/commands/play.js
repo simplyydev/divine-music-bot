@@ -1,5 +1,5 @@
-import { joinVoiceChannel, VoiceConnectionStatus } from '@discordjs/voice';
 import { createQueue, searchSong, playSong } from '../utils/player.js';
+import { createVoiceConnection, setupConnectionListeners } from '../utils/connection.js';
 
 export const playCommand = {
   name: 'play',
@@ -11,7 +11,6 @@ export const playCommand = {
       return interaction.reply('You need to be in a voice channel!');
     }
 
-    // Check for required permissions
     const permissions = voiceChannel.permissionsFor(client.user);
     if (!permissions.has('Connect') || !permissions.has('Speak')) {
       return interaction.reply('I need permissions to join and speak in your voice channel!');
@@ -37,19 +36,16 @@ export const playCommand = {
 
       if (!queue.connection || !queue.playing) {
         queue.playing = true;
-        queue.connection = joinVoiceChannel({
-          channelId: voiceChannel.id,
-          guildId: interaction.guildId,
-          adapterCreator: interaction.guild.voiceAdapterCreator,
-          selfDeaf: true
-        });
-
-        // Wait for the connection to be ready
-        queue.connection.on(VoiceConnectionStatus.Ready, async () => {
+        try {
+          queue.connection = await createVoiceConnection(voiceChannel, interaction.guildId);
+          setupConnectionListeners(queue.connection, queue);
           await playSong(queue, interaction.guildId, client);
-        });
-
-        await interaction.editReply(`🎵 Now playing: **${song.title}**`);
+          await interaction.editReply(`🎵 Now playing: **${song.title}**`);
+        } catch (error) {
+          console.error('Connection error:', error);
+          queue.playing = false;
+          return interaction.editReply('Failed to join voice channel!');
+        }
       } else {
         await interaction.editReply(`🎵 Added to queue: **${song.title}**`);
       }
